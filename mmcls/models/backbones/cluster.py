@@ -8,6 +8,8 @@ from timm.models.layers import DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
 import torch.nn.functional as F
 
+from flash_attn import flash_attn_func 
+
 
 # try:
 #     from mmseg.models.builder import BACKBONES as seg_BACKBONES
@@ -130,11 +132,19 @@ class Clustering(nn.Module):
         centers_feature = self.centers_proposal(feature).reshape(b, c_w*c_h, c)
         
         feature = feature.reshape(b, w*h, c)
-
+        
+        # processing before flash attention
+        centers = centers.reshape(int(b/self.heads), c_w*c_h, self.heads, c).type(torch.half)
+        value = value.reshape(int(b/self.heads), w*h, self.heads, c).type(torch.half)
+        feature = feature.reshape(int(b/self.heads), w*h, self.heads, c).type(torch.half)
+        
         for _ in range(self.num_clustering):    # iterative clustering and updating centers
-            centers = self.conv_c(centers).reshape(b, c_w*c_h, c)
-            similarity = self.softmax((centers @ value.transpose(-2, -1)))
-            centers = (similarity @ feature).reshape(b, c, c_w, c_h)
+            centers = flash_attn_func(centers, value, feature)
+        
+        # processing after flash attention
+        centers = centers.reshape(b, c, c_w, c_h).type(torch.float)
+        value = value.reshape(b, w*h, c).type(torch.float)
+        feature = feature.reshape(b, w*h, c).type(torch.float) 
 
         # similarity
         similarity = torch.sigmoid(self.sim_beta + self.sim_alpha * pairwise_cos_sim(centers.reshape(b,c,-1).permute(0,2,1), x.reshape(b,c,-1).permute(0,2,1)))
