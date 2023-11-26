@@ -92,6 +92,9 @@ Note that:
 - If you want to measure the inference time, please change the number of gpu to 1 for inference.
 - We set `OMP_NUM_THREADS=1` by default, which achieves the best speed on our machines, please change it as needed.
 
+## Acknowledgement
+We thank Runjia Zeng for the contribution to the flash attention center update.
+
 ## Citation
 
 If you find our work helpful in your research, please cite it as:
